@@ -828,7 +828,15 @@ MakeNPCChar_Err:
 
         
 End Sub
-
+Sub SetNPCCharState(ByVal NpcIndex As Integer)
+        On Error GoTo ChangeNPCChar_Err
+100     With NpcList(NpcIndex)
+            .flags.NPCIdle = True
+        End With
+        Exit Sub
+ChangeNPCChar_Err:
+114     Call TraceError(Err.Number, Err.Description, "NPCs.ChangeNPCChar", Erl)
+End Sub
 Sub ChangeNPCChar(ByVal NpcIndex As Integer, ByVal Body As Integer, ByVal Head As Integer, ByVal Heading As e_Heading)
         
         On Error GoTo ChangeNPCChar_Err
@@ -1279,6 +1287,7 @@ Function OpenNPC(ByVal NpcNumber As Integer, _
 142         .Char.BodyIdle = val(Leer.GetValue("NPC" & NpcNumber, "BodyIdle"))
 143         .Char.Ataque1 = val(Leer.GetValue("NPC" & NpcNumber, "Ataque1"))
             .Char.CastAnimation = val(Leer.GetValue("NPC" & NpcNumber, "CastAnimation"))
+            .RangoSpell = val(Leer.GetValue("NPC" & NpcNumber, "RangoSpell"))
 
             Dim CantidadAnimaciones As Integer
 144         CantidadAnimaciones = val(Leer.GetValue("NPC" & NpcNumber, "Animaciones"))
@@ -1564,8 +1573,13 @@ Function OpenNPC(ByVal NpcNumber As Integer, _
             ' Por defecto la animación es idle
             If NumUsers > 0 Then
 424             Call AnimacionIdle(NpcIndex, True)
+'            Else
+'                Call SetNPCCharState(NpcIndex)
             End If
-    
+            
+            If .Movement = NPCEstatico Then
+                Call SetNPCCharState(NpcIndex)
+            End If
            
             ' Si el tipo de movimiento es Caminata
 426         If .Movement = Caminata Then

@@ -2449,6 +2449,7 @@ End Type
 Public Enum e_TipoAI
     Estatico = 1
     MueveAlAzar = 2
+    NPCEstatico = 3
     NpcDefensa = 4
     SigueAmo = 8
     NpcAtacaNpc = 9
@@ -2582,6 +2583,8 @@ Public Type t_Npc
     PuedeInvocar As Byte
     
     Humanoide As Boolean
+    RangoSpell As Byte
+    
 End Type
 
 '**********************************************************

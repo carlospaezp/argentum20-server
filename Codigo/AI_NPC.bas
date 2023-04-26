@@ -27,6 +27,13 @@ Public Sub NpcAI(ByVal NpcIndex As Integer)
                 Case e_TipoAI.Estatico
                     ' Es un NPC estatico, no hace nada.
                     Exit Sub
+                    
+                Case e_TipoAI.NPCEstatico
+                    If .Hostile = 1 Then
+                        Call PerseguirUsuarioCercano(NpcIndex)
+                    Else
+                        Call AI_Static_NPC_Attacks_User(NpcIndex)
+                    End If
 
 104             Case e_TipoAI.MueveAlAzar
 106                 If .Hostile = 1 Then
@@ -153,13 +160,23 @@ Private Sub PerseguirUsuarioCercano(ByVal NpcIndex As Integer)
                 If NPCs.CanMove(.Contadores, .flags) Then
                     Call ChangeNPCChar(npcIndex, .Char.body, .Char.head, GetHeadingFromWorldPos(.pos, UserList(.TargetUser.ArrayIndex).pos))
                 End If
-150             Call AI_AtacarUsuarioObjetivo(NpcIndex)
+                
+                If NpcList(NpcIndex).Movement = NPCEstatico Then
+                 Call AI_Static_NPC_Attacks_User(NpcIndex)
+                Else
+                 Call AI_AtacarUsuarioObjetivo(NpcIndex)
+                End If
+150
+                
             Else
 152             If .NPCtype <> e_NPCType.GuardiaReal And .NPCtype <> e_NPCType.GuardiasCaos Then
 154                 Call RestoreOldMovement(NpcIndex)
                     ' No encontro a nadie cerca, camina unos pasos en cualquier direccion.
-156                 Call AI_CaminarSinRumboCercaDeOrigen(NpcIndex)
-                   
+                    If NpcList(NpcIndex).Movement = NPCEstatico Then
+                    
+                    Else
+156                     Call AI_CaminarSinRumboCercaDeOrigen(NpcIndex)
+                    End If
                 Else
 158                 If Distancia(.Pos, .Orig) > 0 Then
 160                     Call AI_CaminarConRumbo(NpcIndex, .Orig)
@@ -421,6 +438,65 @@ ErrorHandler:
 
 End Sub
 
+ Private Sub AI_Static_NPC_Attacks_User(ByVal AtackerNpcIndex As Integer)
+        On Error GoTo ErrorHandler
+        Dim AttackMagic As Boolean
+        Dim AttackMelee As Boolean
+        Dim IsStuckToUser As Boolean
+        Dim tHeading As Byte
+        Dim NextPosNPC As t_WorldPos
+        Dim AttackFront As Boolean
+        AttackFront = False
+
+     With NpcList(AtackerNpcIndex)
+             
+         If Not IsValidUserRef(.targetUser) Then Exit Sub
+                
+         IsStuckToUser = (Distancia(.pos, UserList(.targetUser.ArrayIndex).pos) <= 1)
+         
+         AttackMagic = .flags.LanzaSpells And IntervaloPermiteLanzarHechizo(AtackerNpcIndex) And (RandomNumber(1, 100) <= 50)
+         
+         AttackMelee = IsStuckToUser And UsuarioAtacableConMelee(AtackerNpcIndex, .targetUser.ArrayIndex) And NPCs.CanAttack(.Contadores, .flags)
+         AttackMelee = AttackMelee And (.flags.LanzaSpells > 0 And (UserList(.targetUser.ArrayIndex).flags.invisible = 0 And UserList(.targetUser.ArrayIndex).flags.Oculto = 0))
+         'AttackMelee = AttackMelee Or .flags.LanzaSpells = 0
+                  
+         ' Turn around and face the User
+         tHeading = GetHeadingFromWorldPos(.pos, UserList(.targetUser.ArrayIndex).pos)
+         If AttackMagic Then
+                ' I cast a Spell on him
+                If NpcLanzaSpellInmovilizado(AtackerNpcIndex, .targetUser.ArrayIndex) And (Distancia(.pos, UserList(.targetUser.ArrayIndex).pos) <= NpcList(AtackerNpcIndex).RangoSpell) And (Distancia(.pos, UserList(.targetUser.ArrayIndex).pos) > 1) Then
+                    'Call ChangeNPCChar(AtackerNpcIndex, .Char.Ataque1, .Char.head, tHeading)
+                 Call NpcLanzaUnSpell(AtackerNpcIndex)
+                End If
+         ElseIf AttackMelee Then
+                Dim ChangeHeading As Boolean
+                ChangeHeading = (.flags.Inmovilizado > 0 And tHeading = .Char.Heading) Or NPCs.CanMove(.Contadores, .flags)
+                Dim UserIndexFront As Integer
+                Call ChangeNPCChar(AtackerNpcIndex, .Char.Ataque1, .Char.head, tHeading)
+                NextPosNPC = ComputeNextHeadingPos(AtackerNpcIndex)
+                UserIndexFront = MapData(NextPosNPC.Map, NextPosNPC.x, NextPosNPC.y).UserIndex
+                AttackFront = (UserIndexFront > 0)
+                If AttackFront And NPCs.CanAttack(.Contadores, .flags) Then
+                    Call AnimacionIdle(AtackerNpcIndex, True)
+                    If UserIndexFront > 0 Then
+                        If UserList(UserIndexFront).flags.Muerto = 0 Then
+                            Call NpcAtacaUser(AtackerNpcIndex, UserIndexFront, tHeading)
+                        End If
+                    End If
+                End If
+            ElseIf Not AttackMagic And Not AttackMelee Then
+                ' comprobar si ya esta en idle
+                ' check if it is already in idle
+                If (RandomNumber(1, 100) >= 50) Then
+                    Call ChangeNPCChar(AtackerNpcIndex, .Char.BodyIdle, .Char.head, tHeading)
+                End If
+            End If
+        End With
+        Exit Sub
+ErrorHandler:
+132     Call TraceError(Err.Number, Err.Description, "AIv2.AI_Static_NPC_Attacks_User", Erl)
+End Sub
+
 Public Sub AI_GuardiaPersigueNpc(ByVal NpcIndex As Integer)
         On Error GoTo ErrorHandler
         Dim targetPos As t_WorldPos
@@ -463,8 +539,6 @@ Public Sub AI_GuardiaPersigueNpc(ByVal NpcIndex As Integer)
         
 ErrorHandler:
 136     Call TraceError(Err.Number, Err.Description, "AIv2.AI_GuardiaAtacaNpc", Erl)
-
-
 End Sub
 
 Private Function DistanciaRadial(OrigenPos As t_WorldPos, DestinoPos As t_WorldPos) As Long
