@@ -454,7 +454,8 @@ End Sub
                 
          IsStuckToUser = (Distancia(.pos, UserList(.targetUser.ArrayIndex).pos) <= 1)
          
-         AttackMagic = .flags.LanzaSpells And IntervaloPermiteLanzarHechizo(AtackerNpcIndex) And (RandomNumber(1, 100) <= 50)
+         AttackMagic = .flags.LanzaSpells And IntervaloPermiteLanzarHechizo(AtackerNpcIndex) And (RandomNumber(1, 100) <= 50) And (UserList(.targetUser.ArrayIndex).flags.invisible = 0 And UserList(.targetUser.ArrayIndex).flags.Oculto = 0)
+         
          
          AttackMelee = IsStuckToUser And UsuarioAtacableConMelee(AtackerNpcIndex, .targetUser.ArrayIndex) And NPCs.CanAttack(.Contadores, .flags)
          AttackMelee = AttackMelee And (.flags.LanzaSpells > 0 And (UserList(.targetUser.ArrayIndex).flags.invisible = 0 And UserList(.targetUser.ArrayIndex).flags.Oculto = 0))
@@ -483,12 +484,6 @@ End Sub
                             Call NpcAtacaUser(AtackerNpcIndex, UserIndexFront, tHeading)
                         End If
                     End If
-                End If
-            ElseIf Not AttackMagic And Not AttackMelee Then
-                ' comprobar si ya esta en idle
-                ' check if it is already in idle
-                If (RandomNumber(1, 100) >= 50) Then
-                    Call ChangeNPCChar(AtackerNpcIndex, .Char.BodyIdle, .Char.head, tHeading)
                 End If
             End If
         End With
