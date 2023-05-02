@@ -918,8 +918,7 @@ End Sub
 Sub ChangeUserChar(ByVal UserIndex As Integer, ByVal body As Integer, ByVal head As Integer, ByVal Heading As Byte, ByVal Arma As Integer, ByVal Escudo As Integer, ByVal Casco As Integer, ByVal Cart As Integer)
         
         On Error GoTo ChangeUserChar_Err
-        
-
+        If IsSet(UserList(UserIndex).flags.StatusMask, e_StatusMask.eTransformed) Then Exit Sub
 100     With UserList(UserIndex).Char
 102         .Body = Body
 104         .Head = Head
@@ -3314,6 +3313,24 @@ Public Function ModifyStamina(ByVal UserIndex As Integer, ByVal amount As Intege
     End With
 End Function
 
+Public Function ModifyMana(ByVal UserIndex As Integer, ByVal Amount As Integer, ByVal CancelIfNotEnought As Boolean, Optional ByVal MinValue = 0) As Boolean
+    ModifyMana = False
+    With UserList(UserIndex)
+    If CancelIfNotEnought And Amount < 0 And .Stats.MinMAN < Abs(Amount) Then
+        Exit Function
+    End If
+    .Stats.MinMAN = .Stats.MinMAN + Amount
+    If .Stats.MinMAN > .Stats.MaxMAN Then
+        .Stats.MinMAN = .Stats.MaxMAN
+    End If
+    If .Stats.MinMAN < MinValue Then
+        .Stats.MinMAN = MinValue
+        ModifyMana = True
+    End If
+    Call WriteUpdateMana(UserIndex)
+    End With
+End Function
+
 Public Sub ResurrectUser(ByVal UserIndex As Integer)
     Call WriteConsoleMsg(UserIndex, "¡Has sido resucitado!", e_FontTypeNames.FONTTYPE_INFO)
     Call SendData(SendTarget.ToPCArea, UserIndex, PrepareMessageParticleFX(UserList(UserIndex).Char.charindex, e_ParticulasIndex.Resucitar, 250, True))
@@ -3334,6 +3351,15 @@ On Error GoTo DoDamageOrHeal_Err
         Color = DamageColor
     End If
     If amount < 0 Then
+        DamageStr = PonerPuntos(Math.Abs(Amount))
+        If SourceType = eUser Then
+            If UserList(SourceIndex).ChatCombate = 1 Then
+                Call WriteLocaleMsg(SourceIndex, 389, e_FontTypeNames.FONTTYPE_FIGHT, UserList(UserIndex).name & "¬" & DamageStr)
+            End If
+            If UserList(UserIndex).ChatCombate = 1 Then
+                Call WriteLocaleMsg(UserIndex, 34, e_FontTypeNames.FONTTYPE_FIGHT, UserList(SourceIndex).name & "¬" & DamageStr)
+            End If
+        End If
         amount = EffectsOverTime.TargetApplyDamageReduction(UserList(UserIndex).EffectOverTime, amount, SourceIndex, SourceType, DamageSourceType)
         Call EffectsOverTime.TargetWasDamaged(UserList(UserIndex).EffectOverTime, SourceIndex, SourceType, DamageSourceType)
     End If
@@ -3435,6 +3461,16 @@ End Function
 
 Public Function GetHitBonus(ByRef User As t_User) As Integer
     GetHitBonus = User.Modifiers.HitBonus + GetWeaponHitBonus(User.invent.WeaponEqpObjIndex, User.clase)
+End Function
+
+'Defines the healing bonus when using a potion, a spell or any other healing source
+Public Function GetSelfHealingBonus(ByRef user As t_User) As Single
+    GetSelfHealingBonus = max(1 + user.Modifiers.SelfHealingBonus, 0)
+End Function
+
+'Defines bonus when healing someone with magic
+Public Function GetMagicHealingBonus(ByRef user As t_User) As Single
+    GetMagicHealingBonus = max(1 + user.Modifiers.MagicHealingBonus, 0)
 End Function
 
 Public Function GetWeaponHitBonus(ByVal WeaponIndex As Integer, ByVal UserClass As e_Class)

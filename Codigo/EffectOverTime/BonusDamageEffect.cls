@@ -6,7 +6,7 @@ BEGIN
   DataSourceBehavior  = 0  'vbNone
   MTSTransactionMode  = 0  'NotAnMTSObject
 END
-Attribute VB_Name = "ProtectEffect"
+Attribute VB_Name = "BonusDamageEffect"
 Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = True
 Attribute VB_PredeclaredId = False
@@ -15,101 +15,126 @@ Option Explicit
 
 Implements IBaseEffectOverTime
 
-Dim TimeSinceLastTick As Long
-Dim DamageProtection As Long
 Dim TickTime As Long
-
-Private DotInfo As t_BaseDotInfo
+Dim TimeSinceLastTick As Long
+Dim TickCount As Integer
+Dim ApplyEffectId As Integer
+Private EffectInfo As t_BaseDotInfo
 Private Source As t_AnyReference
 
 Public Sub Setup(ByVal SourceIndex As Integer, ByVal SourceType As e_ReferenceType, ByVal TargetIndex As Integer, ByVal TargetType As e_ReferenceType, _
                  ByVal EffectId As Integer, ByVal ID As Long)
     TimeSinceLastTick = 0
-    Call SetBaseDot(DotInfo, TargetIndex, TargetType, ID, EffectId)
+    Call SetBaseDot(EffectInfo, TargetIndex, TargetType, ID, EffectId)
     Call SetRef(Source, SourceIndex, SourceType)
-    With EffectOverTime(EffectId)
-        DamageProtection = RandomNumber(.TickPowerMin, .TickPowerMax)
+    Call SetEotEffect
+End Sub
+
+Private Sub SetEotEffect()
+    With EffectOverTime(EffectInfo.EotId)
         TickTime = .TickTime
-        If DotInfo.TargetRef.RefType = eUser And EffectOverTime(DotInfo.EotId).ClientEffectTypeId > 0 Then Call WriteSendSkillCdUpdate(TargetIndex, .ClientEffectTypeId, ID, .TickTime, .buffType)
+        TickCount = .Ticks
+        If EffectInfo.TargetRef.RefType = eUser Then
+            If .ClientEffectTypeId > 0 Then Call WriteSendSkillCdUpdate(EffectInfo.TargetRef.ArrayIndex, .ClientEffectTypeId, EffectInfo.UniqueId, .TickTime, .buffType, TickCount)
+        End If
     End With
-    Call AddShieldToReference(DotInfo.TargetRef, DamageProtection)
+    Call EffectsOverTime.ApplyEotModifier(EffectInfo.TargetRef, EffectOverTime(EffectInfo.EotId))
 End Sub
 
 Public Property Get IBaseEffectOverTime_TypeId() As Integer
-    IBaseEffectOverTime_TypeId = e_EffectOverTimeType.eProtection
+    IBaseEffectOverTime_TypeId = e_EffectOverTimeType.eBonusDamage
 End Property
 
 Public Property Get IBaseEffectOverTime_UniqueId() As Integer
-    IBaseEffectOverTime_UniqueId = DotInfo.UniqueId
+    IBaseEffectOverTime_UniqueId = EffectInfo.UniqueId
 End Property
 
 Public Property Get IBaseEffectOverTime_CasterIsValid() As Boolean
-    IBaseEffectOverTime_CasterIsValid = IsValidRef(Source)
+    IBaseEffectOverTime_CasterIsValid = IsValidRef(EffectInfo.TargetRef)
 End Property
 
 Public Property Get IBaseEffectOverTime_CasterArrayIndex() As Integer
-    IBaseEffectOverTime_CasterArrayIndex = Source.ArrayIndex
+    IBaseEffectOverTime_CasterArrayIndex = EffectInfo.TargetRef.ArrayIndex
 End Property
 
 Public Property Get IBaseEffectOverTime_CasterRefType() As e_ReferenceType
-    IBaseEffectOverTime_CasterRefType = Source.RefType
+    IBaseEffectOverTime_CasterRefType = EffectInfo.TargetRef.RefType
 End Property
 
 Public Property Get IBaseEffectOverTime_CasterUserId() As Long
-    IBaseEffectOverTime_CasterUserId = Source.userID
+    IBaseEffectOverTime_CasterUserId = EffectInfo.TargetRef.userID
 End Property
 
 Public Property Get IBaseEffectOverTime_TargetIsValid() As Boolean
-    IBaseEffectOverTime_TargetIsValid = IsValidRef(DotInfo.TargetRef)
+    IBaseEffectOverTime_TargetIsValid = IsValidRef(EffectInfo.TargetRef)
 End Property
 
 Public Property Get IBaseEffectOverTime_TargetArrayIndex() As Integer
-    IBaseEffectOverTime_TargetArrayIndex = DotInfo.TargetRef.ArrayIndex
+    IBaseEffectOverTime_TargetArrayIndex = EffectInfo.TargetRef.ArrayIndex
 End Property
 
 Public Property Get IBaseEffectOverTime_TargetRefType() As e_ReferenceType
-    IBaseEffectOverTime_TargetRefType = DotInfo.TargetRef.RefType
+    IBaseEffectOverTime_TargetRefType = EffectInfo.TargetRef.RefType
 End Property
 
 Public Property Get IBaseEffectOverTime_TargetUserId() As Long
-    IBaseEffectOverTime_TargetUserId = DotInfo.TargetRef.userID
+    IBaseEffectOverTime_TargetUserId = EffectInfo.TargetRef.userID
 End Property
 
 Public Property Get IBaseEffectOverTime_EffectType() As e_EffectType
-    IBaseEffectOverTime_EffectType = EffectOverTime(DotInfo.EotId).buffType
+    IBaseEffectOverTime_EffectType = EffectOverTime(EffectInfo.EotId).buffType
 End Property
 
 Public Sub IBaseEffectOverTime_Update(ByVal deltaTime As Long)
     TimeSinceLastTick = TimeSinceLastTick + deltaTime
-    If TimeSinceLastTick >= TickTime Or Not IsValidRef(DotInfo.TargetRef) Then
-        DotInfo.RemoveEffect = True
-        Exit Sub
+    If TimeSinceLastTick >= TickTime Or Not IsValidRef(EffectInfo.TargetRef) Then
+        EffectInfo.RemoveEffect = True
     End If
 End Sub
 
 Public Property Get IBaseEffectOverTime_RemoveMe() As Boolean
-    IBaseEffectOverTime_RemoveMe = DotInfo.RemoveEffect
+    IBaseEffectOverTime_RemoveMe = EffectInfo.RemoveEffect
 End Property
 
 Public Property Let IBaseEffectOverTime_RemoveMe(ByVal Value As Boolean)
-    DotInfo.RemoveEffect = Value
+    EffectInfo.RemoveEffect = Value
 End Property
 
 Public Function IBaseEffectOverTime_Reset(ByVal SourceUserId As Integer, ByVal SourceType As e_ReferenceType, ByVal NewEffectId As Integer) As Boolean
+    TimeSinceLastTick = 0
+    If EffectInfo.TargetRef.RefType = eUser Then
+        If EffectInfo.EotId = NewEffectId Then
+            If EffectOverTime(EffectInfo.EotId).ClientEffectTypeId > 0 Then
+                Call WriteSendSkillCdUpdate(EffectInfo.TargetRef.ArrayIndex, EffectOverTime(EffectInfo.EotId).ClientEffectTypeId, EffectInfo.UniqueId, _
+                                            TickTime, EffectOverTime(EffectInfo.EotId).buffType)
+            End If
+        Else
+            If EffectOverTime(EffectInfo.EotId).ClientEffectTypeId > 0 Then
+                Call WriteSendSkillCdUpdate(EffectInfo.TargetRef.ArrayIndex, EffectOverTime(EffectInfo.EotId).ClientEffectTypeId, _
+                                            EffectInfo.UniqueId, 0, EffectOverTime(EffectInfo.EotId).buffType)
+            End If
+        End If
+    End If
+    EffectInfo.EotId = NewEffectId
+    Call EffectsOverTime.ApplyEotModifier(EffectInfo.TargetRef, EffectOverTime(EffectInfo.EotId))
+    Call SetEotEffect
     IBaseEffectOverTime_Reset = True
-    If DotInfo.TargetRef.RefType = eUser And EffectOverTime(DotInfo.EotId).ClientEffectTypeId > 0 Then Call WriteSendSkillCdUpdate(DotInfo.TargetRef.ArrayIndex, EffectOverTime(DotInfo.EotId).ClientEffectTypeId, DotInfo.UniqueId, TickTime - TimeSinceLastTick, EffectOverTime(DotInfo.EotId).buffType)
 End Function
 
 Public Property Get IBaseEffectOverTime_EotId() As Integer
-    IBaseEffectOverTime_EotId = DotInfo.EotId
+    IBaseEffectOverTime_EotId = EffectInfo.EotId
 End Property
 
 Public Sub IBaseEffectOverTime_OnRemove()
-    If DotInfo.Removed Then Exit Sub
-    DotInfo.Removed = True
-    DotInfo.RemoveEffect = True
-    Call AddShieldToReference(DotInfo.TargetRef, -DamageProtection)
-    If DotInfo.TargetRef.RefType = eUser And EffectOverTime(DotInfo.EotId).ClientEffectTypeId > 0 Then Call WriteSendSkillCdUpdate(DotInfo.TargetRef.ArrayIndex, EffectOverTime(DotInfo.EotId).ClientEffectTypeId, DotInfo.UniqueId, 0, EffectOverTime(DotInfo.EotId).buffType)
+    If EffectInfo.Removed Then Exit Sub
+    EffectInfo.Removed = True
+    EffectInfo.RemoveEffect = True
+    Call EffectsOverTime.RemoveEotModifier(EffectInfo.TargetRef, EffectOverTime(EffectInfo.EotId))
+    If EffectInfo.TargetRef.RefType = eUser Then
+        If EffectOverTime(EffectInfo.EotId).ClientEffectTypeId > 0 Then
+            Call WriteSendSkillCdUpdate(EffectInfo.TargetRef.ArrayIndex, EffectInfo.EotId, EffectInfo.UniqueId, 0, EffectOverTime(EffectInfo.EotId).buffType)
+        End If
+    End If
 End Sub
 
 Public Sub IBaseEffectOverTime_TargetUseMagic(ByVal TargetUserId As Integer, ByVal SourceType As e_ReferenceType, ByVal MagicId As Integer)
@@ -128,25 +153,11 @@ Public Sub IBaseEffectOverTime_TargetWasDamaged(ByVal SourceUserId As Integer, B
 End Sub
 
 Public Function IBaseEffectOverTime_ApplyDamageReduction(ByVal Damage As Long, ByVal SourceUserId As Integer, ByVal SourceType As e_ReferenceType, ByVal AttackType As e_DamageSourceType) As Long
-    If EffectOverTime(DotInfo.EotId).OnHitFx > 0 Then
-        If IsVisible(UserList(DotInfo.TargetRef.ArrayIndex)) Then
-            Call SendData(SendTarget.ToPCAliveArea, DotInfo.TargetRef.ArrayIndex, PrepareMessageCreateFX(UserList(DotInfo.TargetRef.ArrayIndex).Char.charindex, EffectOverTime(DotInfo.EotId).OnHitFx, 0, UserList(DotInfo.TargetRef.ArrayIndex).pos.x, UserList(DotInfo.TargetRef.ArrayIndex).pos.y))
-        Else
-            Call SendData(SendTarget.ToIndex, DotInfo.TargetRef.ArrayIndex, PrepareMessageCreateFX(UserList(DotInfo.TargetRef.ArrayIndex).Char.charindex, EffectOverTime(DotInfo.EotId).OnHitFx, 0, UserList(DotInfo.TargetRef.ArrayIndex).pos.x, UserList(DotInfo.TargetRef.ArrayIndex).pos.y))
-        End If
+    TickCount = TickCount - 1
+    If TickCount <= 0 Then
+        Call IBaseEffectOverTime_OnRemove
     End If
-    Dim Reduction As Long
-    Reduction = DamageProtection + Damage
-    If Reduction > 0 Then
-        DamageProtection = Reduction
-        Call AddShieldToReference(DotInfo.TargetRef, Damage)
-        IBaseEffectOverTime_ApplyDamageReduction = 0
-    Else
-        Call AddShieldToReference(DotInfo.TargetRef, -DamageProtection)
-        DamageProtection = 0
-        DotInfo.RemoveEffect = True
-        IBaseEffectOverTime_ApplyDamageReduction = Reduction
-    End If
+    IBaseEffectOverTime_ApplyDamageReduction = Damage
 End Function
 
 Public Sub IBaseEffectOverTime_TargetWillAttackPosition(ByVal Map As Integer, ByVal PosX As Integer, ByVal PosY As Integer)

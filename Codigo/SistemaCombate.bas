@@ -508,10 +508,6 @@ On Error GoTo UserDamageNpc_Err
             Damage = Damage * UserMod.GetPhysicalDamageModifier(UserList(UserIndex))
             Damage = Damage * NPCs.GetPhysicDamageReduction(NpcList(npcIndex))
 118         If Damage < 0 Then Damage = 0
-            ' Mostramos en consola el golpe
-120         If .ChatCombate = 1 Then
-122             Call WriteLocaleMsg(UserIndex, "382", e_FontTypeNames.FONTTYPE_FIGHT, PonerPuntos(Damage))
-            End If
 
             ' Golpe crítico
 124         If PuedeGolpeCritico(UserIndex) Then
@@ -519,10 +515,11 @@ On Error GoTo UserDamageNpc_Err
 126             If RandomNumber(1, 100) <= ProbabilidadGolpeCritico(UserIndex) * 1.5 Then
                     ' Daño del golpe crítico (usamos el daño base)
 128                 DamageExtra = DamageBase * 0.33
-                
+                    DamageExtra = DamageExtra * UserMod.GetPhysicalDamageModifier(UserList(UserIndex))
+                    DamageExtra = DamageExtra * NPCs.GetPhysicDamageReduction(NpcList(NpcIndex))
                     ' Mostramos en consola el daño
 130                 If .ChatCombate = 1 Then
-132                     Call WriteLocaleMsg(UserIndex, "383", e_FontTypeNames.FONTTYPE_FIGHT, PonerPuntos(DamageExtra))
+132                     Call WriteLocaleMsg(UserIndex, 383, e_FontTypeNames.FONTTYPE_FIGHT, PonerPuntos(Damage) & "¬" & (DamageExtra))
                     End If
 
                     ' Color naranja
@@ -535,10 +532,9 @@ On Error GoTo UserDamageNpc_Err
 138             If RandomNumber(1, 100) <= ProbabilidadApuñalar(UserIndex) Then
                     ' Daño del apuñalamiento
 140                 DamageExtra = Damage * 2
-                
                     ' Mostramos en consola el daño
 142                 If .ChatCombate = 1 Then
-144                     Call WriteLocaleMsg(UserIndex, "212", e_FontTypeNames.FONTTYPE_INFOBOLD, PonerPuntos(DamageExtra))
+144                     Call WriteLocaleMsg(UserIndex, 212, e_FontTypeNames.FONTTYPE_INFOBOLD, PonerPuntos(Damage) & "¬" & PonerPuntos(DamageExtra))
                     End If
 
                     ' Color amarillo
@@ -548,16 +544,9 @@ On Error GoTo UserDamageNpc_Err
                 ' Sube skills en apuñalar
 148             Call SubirSkill(UserIndex, Apuñalar)
             End If
-            
-150         If DamageExtra > 0 Then
-152             Damage = Damage + DamageExtra
-154             DamageStr = PonerPuntos(Damage)
-                ' Mostramos el daño total en consola
-156             If .ChatCombate = 1 Then
-158                 Call WriteLocaleMsg(UserIndex, "384", e_FontTypeNames.FONTTYPE_FIGHT, DamageStr)
-                End If
+            If DamageExtra > 0 Then
+                Damage = Damage + DamageExtra
             End If
-            
             ' Restamos el daño al NPC
 168         If NPCs.DoDamageOrHeal(npcIndex, UserIndex, eUser, -damage, e_phisical, .invent.WeaponEqpObjIndex, Color) = eStillAlive Then
                 'efectos
@@ -1016,7 +1005,13 @@ Public Sub UsuarioAtaca(ByVal UserIndex As Integer)
 116         If .Counters.Ocultando Then .Counters.Ocultando = .Counters.Ocultando - 1
             'Movimiento de arma, solo lo envio si no es GM invisible.
 118         If .flags.AdminInvisible = 0 Then
-120             Call SendData(SendTarget.ToPCAliveArea, UserIndex, PrepareMessageArmaMov(.Char.charindex))
+                If IsSet(.flags.StatusMask, e_StatusMask.eTransformed) Then
+                    If .Char.Ataque1 > 0 Then
+                        Call SendData(SendTarget.ToPCAliveArea, UserIndex, PrepareMessageDoAnimation(.Char.charindex, .Char.Ataque1))
+                    End If
+                Else
+120                 Call SendData(SendTarget.ToPCAliveArea, UserIndex, PrepareMessageArmaMov(.Char.charindex))
+                End If
             End If
 
         
@@ -1282,11 +1277,11 @@ Private Sub UserDamageToUser(ByVal AtacanteIndex As Integer, ByVal VictimaIndex 
 
                     ' Mostramos en consola el daño al atacante
 170                 If UserList(AtacanteIndex).ChatCombate = 1 Then
-172                     Call WriteLocaleMsg(AtacanteIndex, "383", e_FontTypeNames.FONTTYPE_FIGHT, .name & "¬" & DamageStr)
+172                     Call WriteLocaleMsg(AtacanteIndex, 383, e_FontTypeNames.FONTTYPE_FIGHT, Damage & "¬" & DamageStr)
                     End If
                     ' Y a la víctima
 174                 If .ChatCombate = 1 Then
-176                     Call WriteLocaleMsg(VictimaIndex, "385", e_FontTypeNames.FONTTYPE_FIGHT, UserList(AtacanteIndex).name & "¬" & DamageStr)
+176                     Call WriteLocaleMsg(VictimaIndex, 385, e_FontTypeNames.FONTTYPE_FIGHT, UserList(AtacanteIndex).name & "¬" & DamageStr)
                     End If
 178                 Call SendData(SendTarget.toPCAliveArea, AtacanteIndex, PrepareMessagePlayWave(SND_IMPACTO_CRITICO, UserList(AtacanteIndex).Pos.X, UserList(AtacanteIndex).Pos.y))
                     ' Color naranja
@@ -1333,19 +1328,6 @@ Private Sub UserDamageToUser(ByVal AtacanteIndex As Integer, ByVal VictimaIndex 
             
 218         If BonusDamage > 0 Then
 220             Damage = Damage + BonusDamage
-222             DamageStr = PonerPuntos(Damage)
-                
-                ' Mostramos el daño total en consola al atacante
-224             If UserList(AtacanteIndex).ChatCombate = 1 Then
-226                 Call WriteLocaleMsg(AtacanteIndex, "384", e_FontTypeNames.FONTTYPE_FIGHT, DamageStr)
-                End If
-                ' Y a la víctima
-228             If .ChatCombate = 1 Then
-230                 Call WriteLocaleMsg(VictimaIndex, "387", e_FontTypeNames.FONTTYPE_FIGHT, UserList(AtacanteIndex).name & "¬" & DamageStr)
-                End If
-                
-232             DamageStr = "¡" & PonerPuntos(Damage) & "!"
-
                 ' Solo si la victima se encuentra en vida completa, generamos la condicion
                 If .Stats.MinHp = .Stats.MaxHp Then
                     ' Si el daño total es superior a su vida maxima, lo dejamos en uno de vida y mostrar un mensaje por consola

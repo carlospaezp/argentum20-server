@@ -16,7 +16,8 @@ Public Enum e_EffectCallbackMask
     eTargetFailedAttack = 8
     eTargetWasDamaged = 16
     eTargetWillAttackPosition = 32
-    eTargetApplyDamageReduction
+    eTargetApplyDamageReduction = 64
+    eTargetChangeTerrain = 128
 End Enum
 
 Public Sub InitializePools()
@@ -25,7 +26,7 @@ On Error GoTo InitializePools_Err
     Dim j As Integer
     Dim InitialSize As Integer
     If RunningInVB() Then
-        InitialSize = 20
+        InitialSize = 2
     Else
         InitialSize = INITIAL_POOL_SIZE
     End If
@@ -238,6 +239,28 @@ On Error GoTo CreateEffect_Err
 624         ElseIf TargetType = eNpc Then
 626             Call AddEffect(NpcList(TargetIndex).EffectOverTime, Protect)
             End If
+        Case e_EffectOverTimeType.eTransform
+630         Dim Transform As TransformEffect
+632         Set Transform = GetEOT(EffectType)
+634         UniqueIdCounter = GetNextId()
+636         Call Transform.Setup(SourceIndex, SourceType, TargetIndex, TargetType, EffectIndex, UniqueIdCounter)
+638         Call AddEffectToUpdate(Transform)
+640         If TargetType = eUser Then
+642             Call AddEffect(UserList(TargetIndex).EffectOverTime, Transform)
+644         ElseIf TargetType = eNpc Then
+646             Call AddEffect(NpcList(TargetIndex).EffectOverTime, Transform)
+            End If
+        Case e_EffectOverTimeType.eBonusDamage
+650         Dim BonusDamage As BonusDamageEffect
+652         Set BonusDamage = GetEOT(EffectType)
+654         UniqueIdCounter = GetNextId()
+656         Call BonusDamage.Setup(SourceIndex, SourceType, TargetIndex, TargetType, EffectIndex, UniqueIdCounter)
+658         Call AddEffectToUpdate(BonusDamage)
+660         If TargetType = eUser Then
+662             Call AddEffect(UserList(TargetIndex).EffectOverTime, BonusDamage)
+664         ElseIf TargetType = eNpc Then
+666             Call AddEffect(NpcList(TargetIndex).EffectOverTime, BonusDamage)
+            End If
         Case Else
             Debug.Assert False
     End Select
@@ -335,6 +358,10 @@ Private Function InstantiateEOT(ByVal EffectType As e_EffectOverTimeType) As IBa
             Set InstantiateEOT = New MultipleAttacks
         Case e_EffectOverTimeType.eProtection
             Set InstantiateEOT = New ProtectEffect
+        Case e_EffectOverTimeType.eTransform
+            Set InstantiateEOT = New TransformEffect
+        Case e_EffectOverTimeType.eBonusDamage
+            Set InstantiateEOT = New BonusDamageEffect
         Case Else
             Debug.Assert False
     End Select
@@ -540,6 +567,14 @@ Public Sub TargetWillAttackPosition(ByRef EffectList As t_EffectOverTimeList, By
     Next i
 End Sub
 
+Public Sub TargetUpdateTerrain(ByRef EffectList As t_EffectOverTimeList)
+    If Not IsSet(EffectList.CallbaclMask, e_EffectCallbackMask.eTargetChangeTerrain) Then Exit Sub
+    Dim i As Integer
+    For i = 0 To EffectList.EffectCount - 1
+         Call EffectList.EffectList(i).TargetChangeTerrain
+    Next i
+End Sub
+
 Public Function ConvertToClientBuff(ByVal buffType As e_EffectType) As e_EffectType
     Select Case buffType
         Case e_EffectType.eInformativeBuff
@@ -549,4 +584,32 @@ Public Function ConvertToClientBuff(ByVal buffType As e_EffectType) As e_EffectT
         Case Else
         ConvertToClientBuff = buffType
     End Select
+End Function
+
+Public Function ApplyEotModifier(ByRef TargetRef As t_AnyReference, ByRef EffectStats As t_EffectOverTime)
+    If IsValidRef(TargetRef) Then
+        Call UpdateIncreaseModifier(TargetRef, MagicBonus, EffectStats.MagicDamageDone)
+        Call UpdateIncreaseModifier(TargetRef, PhysiccalBonus, EffectStats.PhysicalDamageDone)
+        Call UpdateIncreaseModifier(TargetRef, MagicReduction, EffectStats.MagicDamageReduction)
+        Call UpdateIncreaseModifier(TargetRef, PhysicalReduction, EffectStats.PhysicalDamageReduction)
+        Call UpdateIncreaseModifier(TargetRef, MovementSpeed, EffectStats.SpeedModifier)
+        Call UpdateIncreaseModifier(TargetRef, e_ModifierTypes.HitBonus, EffectStats.HitModifier)
+        Call UpdateIncreaseModifier(TargetRef, e_ModifierTypes.EvasionBonus, EffectStats.EvasionModifier)
+        Call UpdateIncreaseModifier(TargetRef, e_ModifierTypes.SelfHealingBonus, EffectStats.SelfHealingBonus)
+        Call UpdateIncreaseModifier(TargetRef, e_ModifierTypes.MagicHealingBonus, EffectStats.MagicHealingBonus)
+    End If
+End Function
+
+Public Function RemoveEotModifier(ByRef TargetRef As t_AnyReference, ByRef EffectStats As t_EffectOverTime)
+    If IsValidRef(TargetRef) Then
+        Call UpdateIncreaseModifier(TargetRef, MagicBonus, -EffectStats.MagicDamageDone)
+        Call UpdateIncreaseModifier(TargetRef, PhysiccalBonus, -EffectStats.PhysicalDamageDone)
+        Call UpdateIncreaseModifier(TargetRef, MagicReduction, -EffectStats.MagicDamageReduction)
+        Call UpdateIncreaseModifier(TargetRef, PhysicalReduction, -EffectStats.PhysicalDamageReduction)
+        Call UpdateIncreaseModifier(TargetRef, MovementSpeed, -EffectStats.SpeedModifier)
+        Call UpdateIncreaseModifier(TargetRef, e_ModifierTypes.HitBonus, -EffectStats.HitModifier)
+        Call UpdateIncreaseModifier(TargetRef, e_ModifierTypes.EvasionBonus, -EffectStats.EvasionModifier)
+        Call UpdateIncreaseModifier(TargetRef, e_ModifierTypes.SelfHealingBonus, -EffectStats.SelfHealingBonus)
+        Call UpdateIncreaseModifier(TargetRef, e_ModifierTypes.MagicHealingBonus, -EffectStats.MagicHealingBonus)
+    End If
 End Function

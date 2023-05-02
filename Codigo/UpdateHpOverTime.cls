@@ -45,12 +45,27 @@ Public Sub Setup(ByVal sourceIndex As Integer, ByVal sourceType As e_ReferenceTy
         If DotInfo.TargetRef.RefType = eUser And EffectOverTime(DotInfo.EotId).ClientEffectTypeId > 0 Then Call WriteSendSkillCdUpdate(TargetIndex, .ClientEffectTypeId, ID, .TickTime * TargetTicks, .buffType)
     End With
     EffectBonus = 1
-    If sourceType = eUser And IsValidRef(Source) Then
-        If IsSet(Modifiers, e_ModifierTypes.MagicBonus) Then
-            EffectBonus = EffectBonus + UserList(Source.ArrayIndex).Modifiers.MagicDamageBonus
-        End If
-        If IsSet(Modifiers, e_ModifierTypes.PhysiccalBonus) Then
-            EffectBonus = EffectBonus + UserList(Source.ArrayIndex).Modifiers.PhysicalDamageBonus
+    If IsValidRef(Source) Then
+        If SourceType = eUser Then
+            If IsSet(Modifiers, e_ModifierTypes.MagicBonus) Then
+                EffectBonus = EffectBonus + UserList(Source.ArrayIndex).Modifiers.MagicDamageBonus
+            End If
+            If IsSet(Modifiers, e_ModifierTypes.PhysiccalBonus) Then
+                EffectBonus = EffectBonus + UserList(Source.ArrayIndex).Modifiers.PhysicalDamageBonus
+            End If
+            If IsSet(Modifiers, e_ModifierTypes.MagicHealingBonus) Then
+                EffectBonus = EffectBonus + UserList(Source.ArrayIndex).Modifiers.MagicHealingBonus
+            End If
+        ElseIf SourceType = eNpc Then
+            If IsSet(Modifiers, e_ModifierTypes.MagicBonus) Then
+                EffectBonus = EffectBonus + NpcList(Source.ArrayIndex).Modifiers.MagicDamageBonus
+            End If
+            If IsSet(Modifiers, e_ModifierTypes.PhysiccalBonus) Then
+                EffectBonus = EffectBonus + NpcList(Source.ArrayIndex).Modifiers.PhysicalDamageBonus
+            End If
+            If IsSet(Modifiers, e_ModifierTypes.MagicHealingBonus) Then
+                EffectBonus = EffectBonus + NpcList(Source.ArrayIndex).Modifiers.MagicHealingBonus
+            End If
         End If
     End If
 End Sub
@@ -120,10 +135,13 @@ Public Property Let IBaseEffectOverTime_RemoveMe(ByVal value As Boolean)
     DotInfo.RemoveEffect = value
 End Property
 
-Public Sub IBaseEffectOverTime_Reset(ByVal SourceUserId As Integer, ByVal SourceType As e_ReferenceType, ByVal NewEffectId As Integer)
+Public Function IBaseEffectOverTime_Reset(ByVal SourceUserId As Integer, ByVal SourceType As e_ReferenceType, ByVal NewEffectId As Integer) As Boolean
+    IBaseEffectOverTime_Reset = True
     TickCount = 0
-    If DotInfo.TargetRef.RefType = eUser And EffectOverTime(DotInfo.EotId).ClientEffectTypeId > 0 Then Call WriteSendSkillCdUpdate(DotInfo.TargetRef.ArrayIndex, EffectOverTime(DotInfo.EotId).ClientEffectTypeId, DotInfo.UniqueId, (TickTime * TargetTicks) - TimeSinceLastTick, EffectOverTime(DotInfo.EotId).buffType)
-End Sub
+    If DotInfo.TargetRef.RefType = eUser And EffectOverTime(DotInfo.EotId).ClientEffectTypeId > 0 Then
+        Call WriteSendSkillCdUpdate(DotInfo.TargetRef.ArrayIndex, EffectOverTime(DotInfo.EotId).ClientEffectTypeId, DotInfo.UniqueId, (TickTime * TargetTicks) - TimeSinceLastTick, EffectOverTime(DotInfo.EotId).buffType)
+    End If
+End Function
 
 Public Property Get IBaseEffectOverTime_EotId() As Integer
     IBaseEffectOverTime_EotId = DotInfo.EotId
@@ -165,6 +183,8 @@ End Property
 Public Property Get IBaseEffectOverTime_KeepAfterDead() As Boolean
     IBaseEffectOverTime_KeepAfterDead = False
 End Property
+Public Sub IBaseEffectOverTime_TargetChangeTerrain()
+End Sub
 
 Public Sub PerformAction()
     Dim TickHP As Integer
@@ -175,6 +195,9 @@ Public Sub PerformAction()
         End If
         If IsSet(Modifiers, e_ModifierTypes.PhysicalReduction) Then
             TickHP = TickHP * UserMod.GetPhysicDamageReduction(UserList(DotInfo.TargetRef.ArrayIndex))
+        End If
+        If IsSet(Modifiers, e_ModifierTypes.SelfHealingBonus) Then
+            TickHP = TickHP * UserMod.GetSelfHealingBonus(UserList(DotInfo.TargetRef.ArrayIndex))
         End If
         If IsValidRef(source) Then
             Call UserMod.DoDamageOrHeal(DotInfo.TargetRef.ArrayIndex, Source.ArrayIndex, Source.RefType, TickHP, e_dot, DotInfo.EotId)
@@ -189,6 +212,17 @@ Public Sub PerformAction()
             End If
         End If
     ElseIf DotInfo.TargetRef.RefType = e_ReferenceType.eNpc Then
+        Debug.Print "original tickamount " & TickHP
+        If IsSet(Modifiers, e_ModifierTypes.MagicReduction) Then
+            TickHP = TickHP * NPCs.GetMagicDamageReduction(NpcList(DotInfo.TargetRef.ArrayIndex))
+        End If
+        If IsSet(Modifiers, e_ModifierTypes.PhysicalReduction) Then
+            TickHP = TickHP * NPCs.GetPhysicDamageReduction(NpcList(DotInfo.TargetRef.ArrayIndex))
+        End If
+        If IsSet(Modifiers, e_ModifierTypes.SelfHealingBonus) Then
+            TickHP = TickHP * NPCs.GetSelfHealingBonus(NpcList(DotInfo.TargetRef.ArrayIndex))
+        End If
+        Debug.Print "final tickamount " & TickHP
         If IsValidRef(source) Then
             Call NPCs.DoDamageOrHeal(DotInfo.TargetRef.ArrayIndex, Source.ArrayIndex, Source.RefType, TickHP, e_dot, DotInfo.EotId)
         Else
