@@ -829,13 +829,14 @@ MakeNPCChar_Err:
         
 End Sub
 Sub SetNPCCharState(ByVal NpcIndex As Integer)
-        On Error GoTo ChangeNPCChar_Err
+        On Error GoTo SetNPCCharState_Err
+
 100     With NpcList(NpcIndex)
             .flags.NPCIdle = True
         End With
         Exit Sub
-ChangeNPCChar_Err:
-114     Call TraceError(Err.Number, Err.Description, "NPCs.ChangeNPCChar", Erl)
+SetNPCCharState_Err:
+114     Call TraceError(Err.Number, Err.Description, "NPCs.SetNPCCharState", Erl)
 End Sub
 Sub ChangeNPCChar(ByVal NpcIndex As Integer, ByVal Body As Integer, ByVal Head As Integer, ByVal Heading As e_Heading)
         
@@ -1573,8 +1574,6 @@ Function OpenNPC(ByVal NpcNumber As Integer, _
             ' Por defecto la animación es idle
             If NumUsers > 0 Then
 424             Call AnimacionIdle(NpcIndex, True)
-'            Else
-'                Call SetNPCCharState(NpcIndex)
             End If
             
             If .Movement = NPCEstatico Then
